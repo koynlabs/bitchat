@@ -431,7 +431,8 @@ struct ContentView: View {
                         (["/m", "/msg"], "<nickname> [message]", "send private message"),
                         (["/slap"], "<nickname>", "slap someone with a trout"),
                         (["/unblock"], "<nickname>", "unblock a peer"),
-                        (["/w"], nil, "see who's online")
+                        (["/w"], nil, "see who's online"),
+                        (["/ca"], nil, "bitchat community token ca")
                     ]
                     
                     // Build the display
@@ -517,7 +518,8 @@ struct ContentView: View {
                             ("/m", "send private message"),
                             ("/slap", "slap someone with a trout"),
                             ("/unblock", "unblock a peer"),
-                            ("/w", "see who's online")
+                            ("/w", "see who's online"),
+                            ("/ca", "bitchat community token ca")
                         ]
                         
                         let input = newValue.lowercased()
