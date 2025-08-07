@@ -420,6 +420,41 @@ struct ContentView: View {
                 .padding(.horizontal, 12)
             }
             
+            // Autocorrect suggestions
+            if viewModel.showAutocorrect && !viewModel.autocorrectSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(viewModel.autocorrectSuggestions.prefix(3)), id: \.self) { suggestion in
+                        Button(action: {
+                            _ = viewModel.applyAutocorrect(suggestion, in: &messageText)
+                        }) {
+                            HStack {
+                                Image(systemName: "textformat.abc")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(secondaryTextColor)
+                                
+                                Text(suggestion)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(textColor)
+                                    .fontWeight(.medium)
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .background(Color.orange.opacity(0.1))
+                    }
+                }
+                .background(backgroundColor)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                )
+                .padding(.horizontal, 12)
+            }
+            
             // Command suggestions
             if showCommandSuggestions && !commandSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
@@ -492,7 +527,7 @@ struct ContentView: View {
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
-                .autocorrectionDisabled(true)
+                .autocorrectionDisabled(!viewModel.autocorrectEnabled)
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
                 #endif
@@ -505,6 +540,7 @@ struct ContentView: View {
                         // Get cursor position (approximate - end of text for now)
                         let cursorPosition = newValue.count
                         viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                        viewModel.updateAutocorrect(for: newValue, cursorPosition: cursorPosition)
                     }
                     
                     // Check for command autocomplete (instant, no debounce needed)

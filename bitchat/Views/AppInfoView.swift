@@ -3,6 +3,7 @@ import SwiftUI
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var viewModel: ChatViewModel
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -29,6 +30,11 @@ struct AppInfoView: View {
             static let mentions = ("at", "mentions", "use @nickname to notify specific people")
             static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
             static let mutualFavorites = ("globe", "mutual favorites", "private message each other via nostr when out of mesh range")
+        }
+        
+        enum Settings {
+            static let title = "SETTINGS"
+            static let autocorrect = ("textformat.abc", "autocorrect", "automatically correct spelling mistakes")
         }
         
         enum Privacy {
@@ -138,6 +144,35 @@ struct AppInfoView: View {
                 FeatureRow(icon: Strings.Features.mentions.0,
                           title: Strings.Features.mentions.1,
                           description: Strings.Features.mentions.2)
+            }
+            
+            // Settings
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(Strings.Settings.title)
+                
+                HStack {
+                    Image(systemName: Strings.Settings.autocorrect.0)
+                        .font(.system(size: 16))
+                        .foregroundColor(textColor)
+                        .frame(width: 24)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(Strings.Settings.autocorrect.1)
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                            .foregroundColor(textColor)
+                        
+                        Text(Strings.Settings.autocorrect.2)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(secondaryTextColor)
+                    }
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: $viewModel.autocorrectEnabled)
+                        .toggleStyle(SwitchToggleStyle(tint: textColor))
+                        .labelsHidden()
+                }
+                .padding(.vertical, 4)
             }
             
             // Privacy

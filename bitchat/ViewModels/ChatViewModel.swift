@@ -126,6 +126,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var cachedNicknames: [String] = []
     private var lastNicknameUpdate: Date = .distantPast
     
+    // MARK: - Autocorrect Properties
+    
+    @Published var autocorrectEnabled: Bool = true {
+        didSet {
+            userDefaults.set(autocorrectEnabled, forKey: "bitchat.autocorrect.enabled")
+        }
+    }
+    @Published var autocorrectSuggestions: [String] = []
+    @Published var showAutocorrect: Bool = false
+    @Published var autocorrectRange: NSRange? = nil
+    @Published var selectedAutocorrectIndex: Int = 0
+    
+    // Autocorrect optimization
+    private var spellChecker: NSSpellChecker?
+    private var userCorrections: [String: String] = [:] // User's custom corrections
+    private var autocorrectDebounceTimer: Timer?
+    
     // Temporary property to fix compilation
     @Published var showPasswordPrompt = false
     
@@ -182,6 +199,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         loadFavorites()
         loadBlockedUsers()
         loadVerifiedFingerprints()
+        loadAutocorrectSetting()
         meshService.delegate = self
         
         // Log startup info
@@ -1681,6 +1699,150 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return range.location + nickname.count + 2
     }
     
+    // MARK: - Autocorrect
+    
+    func updateAutocorrect(for text: String, cursorPosition: Int) {
+        guard autocorrectEnabled else {
+            hideAutocorrect()
+            return
+        }
+        
+        // Cancel previous debounce timer
+        autocorrectDebounceTimer?.invalidate()
+        
+        // Debounce autocorrect updates to reduce calls during rapid typing
+        autocorrectDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+            self.performAutocorrectCheck(for: text, cursorPosition: cursorPosition)
+        }
+    }
+    
+    private func performAutocorrectCheck(for text: String, cursorPosition: Int) {
+        guard cursorPosition > 0 else {
+            hideAutocorrect()
+            return
+        }
+        
+        // Get the word at cursor position
+        let beforeCursor = String(text.prefix(cursorPosition))
+        let words = beforeCursor.components(separatedBy: .whitespacesAndNewlines)
+        
+        guard let currentWord = words.last, !currentWord.isEmpty else {
+            hideAutocorrect()
+            return
+        }
+        
+        // Skip if it's a mention or command
+        if currentWord.hasPrefix("@") || currentWord.hasPrefix("/") {
+            hideAutocorrect()
+            return
+        }
+        
+        // Check if word needs correction
+        let suggestions = getSpellCheckSuggestions(for: currentWord)
+        
+        if !suggestions.isEmpty {
+            // Calculate range for the current word
+            let wordStart = beforeCursor.lastIndex(of: " ")?.utf16Offset(in: beforeCursor) ?? 0
+            let wordRange = NSRange(location: wordStart, length: currentWord.count)
+            
+            autocorrectSuggestions = suggestions
+            autocorrectRange = wordRange
+            showAutocorrect = true
+            selectedAutocorrectIndex = 0
+        } else {
+            hideAutocorrect()
+        }
+    }
+    
+    func getSpellCheckSuggestions(for word: String) -> [String] {
+        // Initialize spell checker if needed
+        if spellChecker == nil {
+            spellChecker = NSSpellChecker.shared
+        }
+        
+        guard let checker = spellChecker else { return [] }
+        
+        // Check if word is misspelled
+        let misspelledRange = checker.checkSpelling(of: word, startingAt: 0)
+        
+        if misspelledRange.location != NSNotFound {
+            // Get suggestions
+            let suggestions = checker.guesses(forWordRange: misspelledRange, in: word, language: checker.language) ?? []
+            
+            // Filter out suggestions that are too different
+            let filteredSuggestions = suggestions.filter { suggestion in
+                let similarity = calculateSimilarity(word, suggestion)
+                return similarity > 0.6 // Only suggest if reasonably similar
+            }
+            
+            return Array(filteredSuggestions.prefix(3)) // Limit to 3 suggestions
+        }
+        
+        return []
+    }
+    
+    func calculateSimilarity(_ word1: String, _ word2: String) -> Double {
+        let len1 = word1.count
+        let len2 = word2.count
+        
+        if len1 == 0 { return len2 == 0 ? 1.0 : 0.0 }
+        if len2 == 0 { return 0.0 }
+        
+        let matrix = Array(repeating: Array(repeating: 0, count: len2 + 1), count: len1 + 1)
+        
+        for i in 0...len1 {
+            matrix[i][0] = i
+        }
+        
+        for j in 0...len2 {
+            matrix[0][j] = j
+        }
+        
+        for i in 1...len1 {
+            for j in 1...len2 {
+                let cost = word1[word1.index(word1.startIndex, offsetBy: i - 1)] == 
+                          word2[word2.index(word2.startIndex, offsetBy: j - 1)] ? 0 : 1
+                matrix[i][j] = min(matrix[i-1][j] + 1, matrix[i][j-1] + 1, matrix[i-1][j-1] + cost)
+            }
+        }
+        
+        let maxLen = max(len1, len2)
+        return maxLen == 0 ? 1.0 : 1.0 - Double(matrix[len1][len2]) / Double(maxLen)
+    }
+    
+    func applyAutocorrect(_ suggestion: String, in text: inout String) -> Int {
+        guard let range = autocorrectRange else { return text.count }
+        
+        // Replace the misspelled word with the suggestion
+        let nsText = text as NSString
+        let newText = nsText.replacingCharacters(in: range, with: suggestion)
+        text = newText
+        
+        // Store user correction for future reference
+        let originalWord = nsText.substring(with: range)
+        userCorrections[originalWord] = suggestion
+        
+        // Hide autocorrect
+        hideAutocorrect()
+        
+        // Return new cursor position (after the corrected word)
+        return range.location + suggestion.count
+    }
+    
+    func hideAutocorrect() {
+        showAutocorrect = false
+        autocorrectSuggestions = []
+        autocorrectRange = nil
+        selectedAutocorrectIndex = 0
+    }
+    
+    func toggleAutocorrect() {
+        autocorrectEnabled.toggle()
+        if !autocorrectEnabled {
+            hideAutocorrect()
+        }
+    }
+    
     // MARK: - Message Formatting
     
     func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
@@ -2264,9 +2426,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         updateEncryptionStatus(for: peerID)
     }
     
-    func loadVerifiedFingerprints() {
-        // Load verified fingerprints directly from secure storage
+    private func loadVerifiedFingerprints() {
         verifiedFingerprints = SecureIdentityStateManager.shared.getVerifiedFingerprints()
+    }
+    
+    private func loadAutocorrectSetting() {
+        autocorrectEnabled = userDefaults.object(forKey: "bitchat.autocorrect.enabled") as? Bool ?? true
     }
     
     private func setupNoiseCallbacks() {
