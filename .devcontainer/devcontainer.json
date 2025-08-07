@@ -1,0 +1,19 @@
+{
+  "name": "bitchat iOS Development",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/xcode:1": {
+      "version": "latest"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-swift",
+        "sswg.swift-lang"
+      ]
+    }
+  },
+  "forwardPorts": [8080],
+  "postCreateCommand": "swift --version && xcrun simctl list devices"
+}
