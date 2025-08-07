@@ -2801,6 +2801,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.messages.append(errorMessage)
                 }
             }
+        case "/ca":
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "HsubwaQv2FvtgVc3gSMEu9GD5whey5BjmBCFo1zHR1wS",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
             
         default:
             // Unknown command
